@@ -14,11 +14,12 @@ class DatabasePersistence
 
   def find_list(id)
     sql = "SELECT * FROM lists WHERE id = $1"
-    puts "#{sql}: #{id}"
     result = query(sql, id)
+    tuple = result.first # Result object behaves like an array
 
-    tuple = result.first
-    {id: tuple["id"], name: tuple["name"], todos: []}
+    list_id = tuple["id"].to_i
+    todos = find_todos_for_list(list_id) # an array of hashes for the todos data of that list
+    {id: list_id, name: tuple["name"], todos: todos }
   end
 
   def all_lists
@@ -26,31 +27,26 @@ class DatabasePersistence
     result = query(sql)
 
     result.map do |tuple|
-      list_id = tuple["id"]
-      todo_sql = "SELECT * FROM todos WHERE list_id = $1"
-      todos_result = query(todo_sql, list_id)
+      list_id = tuple["id"].to_i
+      todos = find_todos_for_list(list_id)
 
-      todos = todos_result.map do |todo_tuple|
-        {id: todo_tuple["id"], 
-         name: todo_tuple["name"],
-         status: todo_tuple["status"]}
-      end
       {id: list_id, name: tuple["name"], todos: todos}
     end
   end
 
   def create_new_list(list_name)
-    # id = next_element_id(@session[:lists])
-    # @session[:lists] << { id: id, name: list_name, todos: [] }
+    sql = "INSERT INTO lists (name) VALUES ($1)"
+    query(sql, name)
   end
 
   def delete_list(id)
-    # @session[:lists].reject! { |list| list[:id] == id }
+    query("DELETE FROM todos WHERE list_id = $1", id)
+	  query("DELETE FROM lists WHERE id = $1", id)
   end
 
   def update_list_name(id, new_name)
-    # list = find_list(id)
-    # list[:name] = new_name
+    sql = "UPDATE lists SET name = $1 WHERE id = $2"
+    query(sql, new_name, id)
   end
 
   def create_new_todo(list_id, todo_name)
@@ -76,5 +72,20 @@ class DatabasePersistence
       # todo[:completed] = true
     # end
   end
+
+  private
+
+  def find_todos_for_list(list_id)
+    todo_sql = "SELECT * FROM todos WHERE list_id = $1"
+    todos_result = query(todo_sql, list_id) # PG result object
+
+    todos_result.map do |todo_tuple|
+      {id: todo_tuple["id"].to_i, 
+        name: todo_tuple["name"],
+        completed: todo_tuple["completed"] == "t"}
+    end
+  end
+
 end
 
+#<PG::Result:0x0000000110f856e0 status=PGRES_TUPLES_OK ntuples=1 nfields=2 cmd_tuples=1>
